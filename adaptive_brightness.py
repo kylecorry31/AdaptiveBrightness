@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
-from subprocess import call
+from subprocess import call, check_output
 import time
 import datetime
 import psutil
 import tensorflow as tf
+
 tf.enable_eager_execution()
 
 
@@ -28,16 +29,22 @@ class LightSensor:
         call(["v4l2-ctl", "--set-ctrl", "exposure_auto_priority=" + str(int(auto_exposure_on))])
 
     def enable(self):
-        self.camera = cv2.VideoCapture(self.camera_port)
-        LightSensor.__set_auto_exposure(False)
-        self.enabled = True
+        try:
+            self.camera = cv2.VideoCapture(self.camera_port)
+            LightSensor.__set_auto_exposure(False)
+            self.enabled = True
+        except Exception:
+            self.enabled = False
 
     def get(self):
         if self.enabled:
-            _, frame = self.camera.read()
-            yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
-            channels = cv2.split(yuv)
-            return np.mean(channels[0])
+            try:
+                _, frame = self.camera.read()
+                yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
+                channels = cv2.split(yuv)
+                return np.mean(channels[0])
+            except Exception:
+                return 0.0
         else:
             return 0.0
 
@@ -53,11 +60,32 @@ class Backlight:
         pass
 
     def set_brightness(self, percentage):
-        percentage = int(to_range(round(percentage), 0, 100))
-        log("Setting brightness to " + str(percentage))
-        call(['gdbus', 'call', '--session', '--dest', 'org.gnome.SettingsDaemon.Power',
-              '--object-path', '/org/gnome/SettingsDaemon/Power', '--method', 'org.freedesktop.DBus.Properties.Set',
-              'org.gnome.SettingsDaemon.Power.Screen', 'Brightness', '<int32 ' + str(percentage) + '>'])
+        try:
+            percentage = int(to_range(round(percentage), 0, 100))
+            log("Setting brightness to " + str(percentage))
+            call(['gdbus', 'call', '--session', '--dest', 'org.gnome.SettingsDaemon.Power',
+                  '--object-path', '/org/gnome/SettingsDaemon/Power', '--method', 'org.freedesktop.DBus.Properties.Set',
+                  'org.gnome.SettingsDaemon.Power.Screen', 'Brightness', '<int32 ' + str(percentage) + '>'])
+        except Exception:
+            pass
+
+    def get_brightness(self):
+        try:
+            output = check_output(['gdbus', 'call', '--session', '--dest', 'org.gnome.SettingsDaemon.Power',
+                                 '--object-path', '/org/gnome/SettingsDaemon/Power', '--method',
+                                 'org.freedesktop.DBus.Properties.Get',
+                                 'org.gnome.SettingsDaemon.Power.Screen', 'Brightness'])
+
+            number = ""
+
+            for char in output:
+                if char.isdigit():
+                    number += char
+
+            return int(number)
+        except Exception:
+            return 0
+
 
 
 class Battery:
@@ -127,6 +155,7 @@ class SimpleAdaptiveBrightness(AdaptiveBrightness):
             self.set_brightness(light * self.brightness_compensation)
             self.last_change = light
 
+
 class MLAdaptiveBrightness(AdaptiveBrightness):
 
     def __init__(self, change_threshold=6, light_sensor=LightSensor(), backlight=Backlight()):
@@ -145,15 +174,26 @@ class MLAdaptiveBrightness(AdaptiveBrightness):
             compile=False
         )
         self.model.compile(optimizer=self.my_optimizer, loss=tf.keras.losses.mean_squared_error)
-
+        self.last_brightness = self.backlight.get_brightness()
 
     def run(self):
         light = self.get_light()
+        current_brightness = self.backlight.get_brightness()
+        if current_brightness != self.last_brightness:
+            self.learn(self.last_change, current_brightness)
+            self.last_brightness = self.backlight.get_brightness()
         if self.last_change == -1 or abs(light - self.last_change) > self.change_threshold:
             self.set_brightness(self.model.predict(np.array([light]))[0][0])
             self.last_change = light
+            self.last_brightness = self.backlight.get_brightness()
 
     def learn(self, light, brightness):
+        remove_list = []
+        for value in self.data:
+            if value[0] == light:
+                remove_list.append(value)
+        for value in remove_list:
+            self.data.remove(value)
         self.data.append([light, brightness])
         features = np.array([x[0] for x in self.data])
         labels = np.array([x[1] for x in self.data])
@@ -166,9 +206,8 @@ class MLAdaptiveBrightness(AdaptiveBrightness):
         )
 
 
-
 if __name__ == "__main__":
     adaptive_brightness = MLAdaptiveBrightness()
     while True:
         adaptive_brightness.run()
-        time.sleep(1)
+        time.sleep(6)
