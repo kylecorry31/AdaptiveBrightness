@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from subprocess import call
 import time
+import psutil
 
 
 def to_range(value, minimum, maximum):
@@ -56,6 +57,18 @@ class Backlight:
               'org.gnome.SettingsDaemon.Power.Screen', 'Brightness', '<int32 ' + str(percentage) + '>'])
 
 
+class Battery:
+
+    def __init__(self):
+        pass
+
+    def get_percent(self):
+        return psutil.sensors_battery().percent
+
+    def is_plugged_in(self):
+        return psutil.sensors_battery().power_plugged
+
+
 class LowPassFilter:
 
     def __init__(self, filter_coef):
@@ -101,7 +114,6 @@ class SimpleAdaptiveBrightness(AdaptiveBrightness):
 
 if __name__ == "__main__":
     adaptive_brightness = SimpleAdaptiveBrightness(0.5)
-
     while True:
         adaptive_brightness.run()
         time.sleep(1)

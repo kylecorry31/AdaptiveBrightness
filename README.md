@@ -6,6 +6,7 @@ Please install the following dependencies:
 * Python 2.7 (python)
 * OpenCV for Python (python-opencv)
 * Numpy for Python (python-numpy)
+* Psutil for Python (python-psutil)
 * V4L-Utils (v4l-utils)
 
 Clone this repository and cd inside the folder.
