@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from subprocess import call
 import time
+import datetime
 import psutil
 
 
@@ -67,6 +68,19 @@ class Battery:
 
     def is_plugged_in(self):
         return psutil.sensors_battery().power_plugged
+
+
+class Clock:
+
+    def __init__(self):
+        pass
+
+    def get_as_float(self):
+        time_of_day = self.get()
+        return time_of_day.hour + time_of_day.minute / 60.0
+
+    def get(self):
+        return datetime.datetime.now().time()
 
 
 class LowPassFilter:
