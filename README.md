@@ -1,5 +1,5 @@
 # Adaptive Brightness
-A personalized experience for screen brightness, built with machine learning algorithms that learn your brightness preferences in different surroundings, even if you don't have a light sensor.
+A personalized experience for screen brightness, built with ML algorithms that learn your brightness preferences in different surroundings, even if you don't have a light sensor.
 
 Adds adaptive brightness to a computer without a light sensor by using your camera (just put a post-it note over it to diffuse the light). This program is designed for my System76 Lemur running Pop!\_OS 18.04, but it should run on any Linux computer running the GNOME desktop environment.
 
