@@ -8,6 +8,7 @@ Please install the following dependencies:
 * Numpy for Python (python-numpy)
 * Psutil for Python (python-psutil)
 * V4L-Utils (v4l-utils)
+* Python tensorflow (pip install tensorflow)
 
 Clone this repository and cd inside the folder.
 
