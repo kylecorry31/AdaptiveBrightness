@@ -127,7 +127,7 @@ class SimpleAdaptiveBrightness(AdaptiveBrightness):
 
 
 if __name__ == "__main__":
-    adaptive_brightness = SimpleAdaptiveBrightness(0.5)
+    adaptive_brightness = SimpleAdaptiveBrightness(0.2)
     while True:
         adaptive_brightness.run()
         time.sleep(1)
