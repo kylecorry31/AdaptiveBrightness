@@ -73,9 +73,9 @@ class Backlight:
     def get_brightness(self):
         try:
             output = check_output(['gdbus', 'call', '--session', '--dest', 'org.gnome.SettingsDaemon.Power',
-                                 '--object-path', '/org/gnome/SettingsDaemon/Power', '--method',
-                                 'org.freedesktop.DBus.Properties.Get',
-                                 'org.gnome.SettingsDaemon.Power.Screen', 'Brightness'])
+                                   '--object-path', '/org/gnome/SettingsDaemon/Power', '--method',
+                                   'org.freedesktop.DBus.Properties.Get',
+                                   'org.gnome.SettingsDaemon.Power.Screen', 'Brightness'])
 
             number = ""
 
@@ -86,7 +86,6 @@ class Backlight:
             return int(number)
         except Exception:
             return 0
-
 
 
 class Battery:
@@ -157,6 +156,20 @@ class SimpleAdaptiveBrightness(AdaptiveBrightness):
             self.last_change = light
 
 
+class ExponentAdaptiveBrightness(AdaptiveBrightness):
+    def __init__(self, brightness_compensation, change_threshold=6, light_sensor=LightSensor(), backlight=Backlight()):
+        AdaptiveBrightness.__init__(self, light_sensor, backlight)
+        self.brightness_compensation = brightness_compensation
+        self.last_change = -1
+        self.change_threshold = change_threshold
+
+    def run(self):
+        light = self.get_light()
+        if self.last_change == -1 or abs(light - self.last_change) > self.change_threshold:
+            self.set_brightness((light / 255.0) ** (3 - (1 + self.brightness_compensation)) * 100)
+            self.last_change = light
+
+
 class MLAdaptiveBrightness(AdaptiveBrightness):
 
     def __init__(self, change_threshold=6, light_sensor=LightSensor(), backlight=Backlight()):
@@ -212,19 +225,26 @@ class AdaptiveBrightnessFactory:
     def __init__(self):
         pass
 
-    def get(self, algorithm, brightness_compansation=0.4):
+    def get(self, algorithm, brightness_compensation=0.4):
         if algorithm == "ml":
             return MLAdaptiveBrightness()
         elif algorithm == "simple":
-            return SimpleAdaptiveBrightness(brightness_compansation)
+            return SimpleAdaptiveBrightness(brightness_compensation)
+        elif algorithm == "exponent":
+            return ExponentAdaptiveBrightness(brightness_compensation)
         return None
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--frequency", "-f", help="The frequency in seconds which the adaptive brightness will update. Default is 30s.", type=int)
-    parser.add_argument("--algorithm", "-a", help="The algorithm to use, either [ml, simple]. Default is ml.", type=str, choices=["ml", "simple"])
-    parser.add_argument("--brightness_compensation", "-b", help="The brightness compensation factor if using the simple algorithm. Strictly positive, normally less than 1.", type=float)
+    parser.add_argument("--frequency", "-f",
+                        help="The frequency in seconds which the adaptive brightness will update. Default is 30s.",
+                        type=int)
+    parser.add_argument("--algorithm", "-a", help="The algorithm to use, either [ml, simple]. Default is ml.", type=str,
+                        choices=["ml", "simple", "exponent"])
+    parser.add_argument("--brightness_compensation", "-b",
+                        help="The brightness compensation factor if using the simple algorithm. Strictly positive, normally less than 1.",
+                        type=float)
     args = parser.parse_args()
 
     if not args.frequency:
@@ -233,7 +253,7 @@ if __name__ == "__main__":
     if not args.algorithm:
         args.algorithm = "ml"
 
-    if not args.brightness_compensation:
+    if args.brightness_compensation is None:
         args.brightness_compensation = 0.4
 
     algorithm_factory = AdaptiveBrightnessFactory()
