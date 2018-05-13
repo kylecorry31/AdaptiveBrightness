@@ -5,6 +5,7 @@ import time
 import datetime
 import psutil
 import tensorflow as tf
+import argparse
 
 tf.enable_eager_execution()
 
@@ -206,8 +207,37 @@ class MLAdaptiveBrightness(AdaptiveBrightness):
         )
 
 
+class AdaptiveBrightnessFactory:
+
+    def __init__(self):
+        pass
+
+    def get(self, algorithm, brightness_compansation=0.4):
+        if algorithm == "ml":
+            return MLAdaptiveBrightness()
+        elif algorithm == "simple":
+            return SimpleAdaptiveBrightness(brightness_compansation)
+        return None
+
+
 if __name__ == "__main__":
-    adaptive_brightness = MLAdaptiveBrightness()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--frequency", "-f", help="The frequency in seconds which the adaptive brightness will update. Default is 30s.", type=int)
+    parser.add_argument("--algorithm", "-a", help="The algorithm to use, either [ml, simple]. Default is ml.", type=str, choices=["ml", "simple"])
+    parser.add_argument("--brightness_compensation", "-b", help="The brightness compensation factor if using the simple algorithm. Strictly positive, normally less than 1.", type=float)
+    args = parser.parse_args()
+
+    if not args.frequency:
+        args.frequency = 30
+
+    if not args.algorithm:
+        args.algorithm = "ml"
+
+    if not args.brightness_compensation:
+        args.brightness_compensation = 0.4
+
+    algorithm_factory = AdaptiveBrightnessFactory()
+    adaptive_brightness = algorithm_factory.get(args.algorithm, args.brightness_compensation)
     while True:
         adaptive_brightness.run()
-        time.sleep(6)
+        time.sleep(args.frequency)
