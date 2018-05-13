@@ -100,6 +100,15 @@ class Battery:
         return psutil.sensors_battery().power_plugged
 
 
+class Calendar:
+
+    def __init__(self):
+        pass
+
+    def get_day_of_week(self):
+        return datetime.datetime.now().weekday()
+
+
 class Clock:
 
     def __init__(self):
@@ -233,6 +242,25 @@ class AdaptiveBrightnessFactory:
         elif algorithm == "exponent":
             return ExponentAdaptiveBrightness(brightness_compensation)
         return None
+
+
+class UserContext:
+
+    def __init__(self, ambient_light, time_of_day, day_of_week, battery_percent, on_charger):
+        self.ambient_light = ambient_light  # Between 0 and 100
+        self.time_of_day = time_of_day  # Between 0 and 24
+        self.day_of_week = day_of_week  # Monday = 0, ..., Sunday = 6
+        self.battery_percent = battery_percent  # Between 0 and 100
+        self.on_charger = on_charger  # True or False
+
+    @staticmethod
+    def generate(light_sensor=LightSensor(), clock=Clock(), calendar=Calendar(), battery=Battery()):
+        light_sensor.enable()
+        ctx = UserContext(light_sensor.get() / 255.0 * 100, clock.get_as_float(), calendar.get_day_of_week(), battery.get_percent(), battery.is_plugged_in())
+        light_sensor.disable()
+        return ctx
+
+
 
 
 if __name__ == "__main__":
