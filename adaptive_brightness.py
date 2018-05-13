@@ -150,6 +150,24 @@ class AdaptiveBrightness:
         self.backlight.set_brightness(percentage)
 
 
+class RangedAdaptiveBrightness(AdaptiveBrightness):
+
+    def __init__(self, base_point, change_threshold=6, light_sensor=LightSensor(), backlight=Backlight()):
+        AdaptiveBrightness.__init__(self, light_sensor, backlight)
+        self.base_point = base_point
+        self.last_change = -1
+        self.change_threshold = change_threshold
+
+    def run(self):
+        light = self.get_light()
+        if self.last_change == -1 or abs(light - self.last_change) > self.change_threshold:
+            light_percent = light / 255.0
+            min_brightness = max(0, self.base_point - 10)
+            max_brightness = min(100, self.base_point + 20)
+            self.set_brightness(light_percent * (max_brightness - min_brightness) + min_brightness)
+            self.last_change = light
+
+
 class SimpleAdaptiveBrightness(AdaptiveBrightness):
 
     def __init__(self, brightness_compensation, change_threshold=6, light_sensor=LightSensor(), backlight=Backlight()):
@@ -241,6 +259,8 @@ class AdaptiveBrightnessFactory:
             return SimpleAdaptiveBrightness(brightness_compensation)
         elif algorithm == "exponent":
             return ExponentAdaptiveBrightness(brightness_compensation)
+        elif algorithm == "ranged":
+            return RangedAdaptiveBrightness(brightness_compensation)
         return None
 
 
@@ -256,11 +276,10 @@ class UserContext:
     @staticmethod
     def generate(light_sensor=LightSensor(), clock=Clock(), calendar=Calendar(), battery=Battery()):
         light_sensor.enable()
-        ctx = UserContext(light_sensor.get() / 255.0 * 100, clock.get_as_float(), calendar.get_day_of_week(), battery.get_percent(), battery.is_plugged_in())
+        ctx = UserContext(light_sensor.get() / 255.0 * 100, clock.get_as_float(), calendar.get_day_of_week(),
+                          battery.get_percent(), battery.is_plugged_in())
         light_sensor.disable()
         return ctx
-
-
 
 
 if __name__ == "__main__":
@@ -268,8 +287,8 @@ if __name__ == "__main__":
     parser.add_argument("--frequency", "-f",
                         help="The frequency in seconds which the adaptive brightness will update. Default is 30s.",
                         type=int)
-    parser.add_argument("--algorithm", "-a", help="The algorithm to use, either [ml, simple]. Default is ml.", type=str,
-                        choices=["ml", "simple", "exponent"])
+    parser.add_argument("--algorithm", "-a", help="The algorithm to use. Default is ml.", type=str,
+                        choices=["ml", "simple", "exponent", "ranged"])
     parser.add_argument("--brightness_compensation", "-b",
                         help="The brightness compensation factor if using the simple algorithm. Strictly positive, normally less than 1.",
                         type=float)
@@ -282,7 +301,10 @@ if __name__ == "__main__":
         args.algorithm = "ml"
 
     if args.brightness_compensation is None:
-        args.brightness_compensation = 0.4
+        if args.algorithm == "ranged":
+            args.brightness_compensation = 50
+        else:
+            args.brightness_compensation = 0.4
 
     algorithm_factory = AdaptiveBrightnessFactory()
     adaptive_brightness = algorithm_factory.get(args.algorithm, args.brightness_compensation)
