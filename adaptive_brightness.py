@@ -1,13 +1,11 @@
-import cv2
 import numpy as np
+import cv2
 from subprocess import call, check_output
 import time
 import datetime
 import psutil
 import tensorflow as tf
 import argparse
-
-tf.enable_eager_execution()
 
 
 def to_range(value, minimum, maximum):
@@ -57,16 +55,28 @@ class LightSensor:
 
 class Backlight:
 
-    def __init__(self):
-        pass
+    def __init__(self, lerp_time=2000.0):
+        self.lerp_time = float(lerp_time)
 
     def set_brightness(self, percentage):
         try:
             percentage = int(to_range(round(percentage), 0, 100))
             log("Setting brightness to " + str(percentage))
-            call(['gdbus', 'call', '--session', '--dest', 'org.gnome.SettingsDaemon.Power',
-                  '--object-path', '/org/gnome/SettingsDaemon/Power', '--method', 'org.freedesktop.DBus.Properties.Set',
-                  'org.gnome.SettingsDaemon.Power.Screen', 'Brightness', '<int32 ' + str(percentage) + '>'])
+            if self.lerp_time == 0:
+                call(['gdbus', 'call', '--session', '--dest', 'org.gnome.SettingsDaemon.Power',
+                      '--object-path', '/org/gnome/SettingsDaemon/Power', '--method',
+                      'org.freedesktop.DBus.Properties.Set',
+                      'org.gnome.SettingsDaemon.Power.Screen', 'Brightness',
+                      '<int32 ' + str(percentage) + '>'])
+            start_time = time.time()
+            current_percentage = self.get_brightness()
+            lerp = lambda t: int(to_range(round((percentage - current_percentage) * t + current_percentage), 0, 100))
+            time_diff = (time.time() - start_time) * 1000.0
+            while time_diff < self.lerp_time:
+                call(['gdbus', 'call', '--session', '--dest', 'org.gnome.SettingsDaemon.Power',
+                      '--object-path', '/org/gnome/SettingsDaemon/Power', '--method', 'org.freedesktop.DBus.Properties.Set',
+                      'org.gnome.SettingsDaemon.Power.Screen', 'Brightness', '<int32 ' + str(lerp(time_diff / self.lerp_time)) + '>'])
+                time_diff = (time.time() - start_time) * 1000.0
         except Exception:
             pass
 
@@ -201,6 +211,7 @@ class MLAdaptiveBrightness(AdaptiveBrightness):
 
     def __init__(self, change_threshold=6, light_sensor=LightSensor(), backlight=Backlight()):
         AdaptiveBrightness.__init__(self, light_sensor, backlight)
+        tf.enable_eager_execution()
         self.change_threshold = change_threshold
         self.last_change = -1
         self.data = []
@@ -216,6 +227,10 @@ class MLAdaptiveBrightness(AdaptiveBrightness):
         )
         self.model.compile(optimizer=self.my_optimizer, loss=tf.keras.losses.mean_squared_error)
         self.last_brightness = self.backlight.get_brightness()
+
+        for i in range(256):
+            print(self.model.predict(np.array([i]))[0][0])
+
 
     def run(self):
         light = self.get_light()
